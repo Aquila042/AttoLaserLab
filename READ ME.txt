@@ -1,0 +1,5 @@
+TOF in ns
+Delay in fs
+Retarding potential 15V
+Accelerating potential 3V
+(NeNe scan01 2019-04-26)
