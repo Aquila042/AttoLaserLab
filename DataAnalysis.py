@@ -36,13 +36,15 @@ bands = [433, 443, 454, 466, 478, 492, 507, 524, 540, 560, 580, 602, 627, 654,
 #plt.plot(bands, [intScan[i] for i in bands], "g.")
 
 #note m_e = 1 in au
+m_e = 9.10953*1e-31
 Veff = 1.178185# au or 32.06 #eV
 L = 2 #m
+Hartre = 4.35974*1e-18 #J is one au energy
 
 bandTOF = [TOF[i]*1e-9 for i in bands]
 
 def kinEnergy(gamma, tTOF):
-    return((L + gamma)**2/(2*tTOF**2) + Veff)
+    return((L + gamma)**2/(2*tTOF**2) - Veff)
 
 #bandDiff = [bands[n+1] - bands[n] for n in range(len(bands)-1)]
 
@@ -57,9 +59,15 @@ def bandDiff(gamma, bandCenter = bandTOF):
     goodness = abs(sum([0.057 - d for d in diff]))/len(diff)
     return(goodness)
 
-optimalGamma = minimize(bandDiff, 0).x
+optimalGamma = minimize(bandDiff, -0.5, args=(bandTOF), tol = 1e-10).x
 print(optimalGamma, bandDiff(optimalGamma))
+#Note, as far as I can tell gamma = -0.35680721
 
-plt.plot(np.linspace(-2, 2, 100), [bandDiff(g) for g in np.linspace(-2, 2, 100)])
+plt.plot(np.linspace(-2, 2, 1000), [bandDiff(g) for g in np.linspace(-2, 2, 1000)])
+plt.plot(optimalGamma, bandDiff(optimalGamma), "rx")
 plt.yscale("log")
+
+plt.figure(dpi=100)
+calEnergy = [kinEnergy(optimalGamma,t) for t in TOF]
+plt.plot(calEnergy, intScan)
 
