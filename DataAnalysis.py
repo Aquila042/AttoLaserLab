@@ -18,13 +18,13 @@ TOF = np.loadtxt("TOF.txt")
 t = np.linspace(0,5000,5000)
 
 
-#plt.figure(dpi=150)
-#plt.plot(t,intScan)
+plt.figure(dpi=150)
+plt.plot(t,intScan)
 
 #find peaks in raw data
 startLook = 4000
-indices = find_peaks(intScan[startLook:], threshold=20)[0]
-indices = [x + startLook for x in indices]
+#indices = find_peaks(intScan[startLook:], threshold=20)[0]
+#indices = [x + startLook for x in indices]
 #print(indices)
 #plt.plot(indices, [intScan[i] for i in indices], "rx")
 
@@ -35,7 +35,9 @@ bands = [433, 443, 454, 466, 478, 492, 507, 524, 540, 560, 580, 602, 627, 654,
          682, 717, 755, 801, 856, 918, 993, 1095, 1215, 1402, 1670, 2229, 4248]
 
 
-#plt.plot(bands, [intScan[i] for i in bands], "g.")
+plt.plot(bands, [intScan[i] for i in bands], "g.")
+plt.xlabel("TOF (ns)")
+plt.ylabel("Intensity (arb. units)")
 
 #note m_e = 1 in au
 m_e = 9.10953*1e-31
@@ -65,19 +67,24 @@ optimalGamma = minimize(bandDiff, -0.5, args=(bandTOF), tol = 1e-10).x
 print(optimalGamma, bandDiff(optimalGamma))
 #Note, as far as I can tell gamma = -0.35680721
 
-plt.figure()
-plt.plot(np.linspace(-2, 2, 1000), [bandDiff(g) for g in np.linspace(-2, 2, 1000)])
+plt.figure(dpi=150)
+plt.plot(np.linspace(-1, 1, 1000), [bandDiff(g) for g in np.linspace(-1, 1, 1000)])
 plt.plot(optimalGamma, bandDiff(optimalGamma), "rx")
 plt.yscale("log")
+plt.xlabel("gamma factor (m)")
+plt.ylabel("calibration score")
 
-#plt.figure(dpi=100)
+plt.figure(dpi=150)
 calEnergy = [kinEnergy(optimalGamma,t) for t in TOF*1e-9]
-#plt.plot(calEnergy, intScan)
-#plt.xlim(1, 3.5)
-#plt.plot([float(calEnergy[i]) for i in bands], [intScan[i] for i in bands], "rx")
+plt.plot(calEnergy, intScan)
+plt.xlim(1, 3.5)
+plt.plot([float(calEnergy[i]) for i in bands], [intScan[i] for i in bands], "rx")
+plt.xlabel("E_kin (au)")
+plt.ylabel("Intensity (arb. units)")
 #%%
 
 sideBands = [bands[i*2] for i in range(int(len(bands)/2 + 1))]
+delay = np.loadtxt("delay.txt") #in fs
 
 def sideBandF(t, a, b, c, omega):
     return(a + b*np.cos(omega*t + c))
@@ -98,18 +105,19 @@ omegaQ = 0.057*28
 
 #OBS fit needs a good p0 guess to be accurate
 
-fit = curve_fit(sideBandF, np.linspace(0,50,50), sideBandIntensity, p0 = (3, 2, 0, 0.98), bounds = [0, np.inf])
+fit = curve_fit(sideBandF, delay, sideBandIntensity, p0 = (3, 2, 0, 0.98), bounds = [0, np.inf])
 para = fit[0]
 print(para)
 
 
-#plt.figure(dpi=100)
-#plt.plot(range(50), sideBandIntensity, ".")
-#plt.plot(np.linspace(0, 50, 500), [sideBandF(y, para[0], para[1], para[2], para[3]) for y in np.linspace(0, 50, 500)])
+plt.figure(dpi=100)
+plt.plot(delay, sideBandIntensity, ".")
+plt.plot(np.linspace(delay[0], delay[-1], 500), [sideBandF(y, para[0], para[1], para[2], para[3]) for y in np.linspace(0, 50, 500)])
 
-#print(fit[0][2])
-#print(np.sqrt(np.diag(fit[1]))[2])
+print(fit[0][2])
+print(np.sqrt(np.diag(fit[1]))[2])
 #side band phases found from the above regresion
+#%%
 sbPhase = [0.5839685139096004, 5.9459518118470176e-18, 2.7998216661937906e-16, 0.004831329978085194, 0.47054149214539936,
            0.5895038166673301, 0.9239772189004821, 0.937013891261136, 1.389932618549851, 1.5449515245808427,
            1.8557349919270725, 2.255696101490715, 2.4018044336588003, 2.6317644371219098]
@@ -140,6 +148,43 @@ plt.ylabel("Side band Phase")
 deltaPhase = 0.11571176477495296
 deltaPhaseErr = 0.010804025322714456
 
+#%% Renorm plotting
+#Create vector from row in scan transforming x according to kinEnergy()
 
+def reCal(row, N, cutoff = (1, 5000)):
+    calX = [kinEnergy(-0.35680722, (x+1)*1e-9) for x in range(cutoff[0], cutoff[1])]
+    minE = kinEnergy(-0.35680722, cutoff[1]*1e-9)
+    maxE = kinEnergy(-0.35680722, cutoff[0]*1e-9)
+    bins = np.linspace(minE, maxE, N)
+    trimRow = row[cutoff[0]: cutoff[1]]
+    
+    reBin = []
+    for d in range(N):
+        reBin.append([0])
+    
+    binIndx = np.digitize(calX, bins)
+    
+    for i in range(len(calX)):
+        reBin[binIndx[i]].append(trimRow[i])
+    
+    normReBin = [sum(m)/len(m) for m in reBin]
+    return(normReBin, (minE, maxE))
+    
 
+calScan = []
+N = 300
+for r in range(len(scan)):
+    calR = reCal(scan[r], N, cutoff = (450, 2500))
+    calScan.append(calR[0])
+EBound = calR[1]
 
+calScanA = np.array(calScan)
+plt.figure(dpi=150)
+plt.imshow(calScanA, alpha=0.8, cmap='coolwarm', aspect="auto")
+plt.xticks(np.array([0, 0.2, 0.4, 0.6, 0.8, 1])*N, [round(l, 4) for l in np.linspace(EBound[0], EBound[1], 6)])
+plt.xlabel("Ekin (a.u.)")
+plt.yticks([0, 10, 20, 30, 40 ,50], [round(l, 4) for l in np.linspace(20, 29.8, 6)])
+plt.ylabel("delay (fs)")
+        
+    
+   
